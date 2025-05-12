@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EVM Calculator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    label {
+      font-weight: bold;
+    }
+    input, select, button {
+      padding: 8px;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+    canvas {
+      margin-top: 30px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .warning {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>EVM Calculator</h2>
+    <label for="tanggal">Tanggal:</label>
+    <input type="date" id="tanggal">
+
+    <label for="bac">BAC (Rp):</label>
+    <input type="number" id="bac" placeholder="Contoh: 100000000">
+
+    <label for="pv">Planned Value (PV) - Rp:</label>
+    <input type="number" id="pv" placeholder="Contoh: 50000000">
+
+    <label for="ev">Earned Value (EV) - Rp:</label>
+    <input type="number" id="ev" placeholder="Contoh: 40000000">
+
+    <label for="ac">Actual Cost (AC) - Rp:</label>
+    <input type="number" id="ac" placeholder="Contoh: 45000000">
+
+    <label for="eacMethod">Metode EAC:</label>
+    <select id="eacMethod">
+      <option value="1">EAC = BAC / CPI</option>
+      <option value="2">EAC = AC + (BAC - EV)</option>
+      <option value="3">EAC = AC + ((BAC - EV) / (CPI × SPI))</option>
+    </select>
+
+    <button onclick="hitungEVM()">Hitung</button>
+
+    <h3>Hasil:</h3>
+    <p id="spi"></p>
+    <p id="cpi"></p>
+    <p id="vac"></p>
+    <p id="eac"></p>
+    <p id="warning" class="warning"></p>
+
+    <table id="evmTable" style="display:none">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Nilai</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>BAC</td><td id="t_bac"></td></tr>
+        <tr><td>PV</td><td id="t_pv"></td></tr>
+        <tr><td>EV</td><td id="t_ev"></td></tr>
+        <tr><td>AC</td><td id="t_ac"></td></tr>
+        <tr><td>SPI</td><td id="t_spi"></td></tr>
+        <tr><td>CPI</td><td id="t_cpi"></td></tr>
+        <tr><td>VAC</td><td id="t_vac"></td></tr>
+        <tr><td>EAC</td><td id="t_eac"></td></tr>
+      </tbody>
+    </table>
+
+    <button onclick="downloadExcel()" style="margin-top:10px">Download Excel</button>
+
+    <canvas id="evmChart" width="400" height="200"></canvas>
+    <canvas id="timelineChart" width="400" height="200"></canvas>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mini.min.js"></script>
+  <script>
+    let hasilEVM = {};
+    let timelineData = [];
+
+    function hitungEVM() {
+      const tanggal = document.getElementById("tanggal").value;
+      const bac = parseFloat(document.getElementById("bac").value);
+      const pv = parseFloat(document.getElementById("pv").value);
+      const ev = parseFloat(document.getElementById("ev").value);
+      const ac = parseFloat(document.getElementById("ac").value);
+      const method = document.getElementById("eacMethod").value;
+      const warning = document.getElementById("warning");
+      warning.innerText = "";
+
+      let spi = 0, cpi = 0, eac = 0, vac = 0;
+
+      if (pv !== 0) spi = ev / pv;
+      if (ac !== 0) cpi = ev / ac;
+
+      if ((method == "1" && cpi === 0) || (method == "3" && (cpi === 0 || spi === 0))) {
+        warning.innerText = "Tidak bisa menghitung EAC karena CPI atau SPI = 0.";
+        eac = 0;
+      } else {
+        if (method == "1") eac = bac / cpi;
+        else if (method == "2") eac = ac + (bac - ev);
+        else if (method == "3") eac = ac + ((bac - ev) / (cpi * spi));
+        vac = bac - eac;
+      }
+
+      hasilEVM = {
+        Tanggal: tanggal,
+        BAC: bac,
+        PV: pv,
+        EV: ev,
+        AC: ac,
+        SPI: spi,
+        CPI: cpi,
+        VAC: vac,
+        EAC: eac
+      };
+
+      timelineData.push({ tanggal, PV: pv, EV: ev, AC: ac });
+
+      document.getElementById("spi").innerText = `SPI: ${spi.toFixed(2)}`;
+      document.getElementById("cpi").innerText = `CPI: ${cpi.toFixed(2)}`;
+      document.getElementById("eac").innerText = `EAC: Rp ${eac.toLocaleString()}`;
+      document.getElementById("vac").innerText = `VAC: Rp ${vac.toLocaleString()}`;
+
+      document.getElementById("t_bac").innerText = `Rp ${bac.toLocaleString()}`;
+      document.getElementById("t_pv").innerText = `Rp ${pv.toLocaleString()}`;
+      document.getElementById("t_ev").innerText = `Rp ${ev.toLocaleString()}`;
+      document.getElementById("t_ac").innerText = `Rp ${ac.toLocaleString()}`;
+      document.getElementById("t_spi").innerText = spi.toFixed(2);
+      document.getElementById("t_cpi").innerText = cpi.toFixed(2);
+      document.getElementById("t_vac").innerText = `Rp ${vac.toLocaleString()}`;
+      document.getElementById("t_eac").innerText = `Rp ${eac.toLocaleString()}`;
+      document.getElementById("evmTable").style.display = "table";
+
+      const ctx = document.getElementById("evmChart").getContext("2d");
+      if (window.evmChart) window.evmChart.destroy();
+      window.evmChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: ["PV", "EV", "AC"],
+          datasets: [{
+            label: "Nilai (Rp)",
+            data: [pv, ev, ac],
+            backgroundColor: ["#3498db", "#2ecc71", "#e74c3c"]
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return 'Rp ' + value.toLocaleString();
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const tctx = document.getElementById("timelineChart").getContext("2d");
+      if (window.timelineChart) window.timelineChart.destroy();
+      window.timelineChart = new Chart(tctx, {
+        type: "line",
+        data: {
+          labels: timelineData.map(d => d.tanggal),
+          datasets: [
+            {
+              label: "PV",
+              data: timelineData.map(d => d.PV),
+              borderColor: "#3498db",
+              fill: false
+            },
+            {
+              label: "EV",
+              data: timelineData.map(d => d.EV),
+              borderColor: "#2ecc71",
+              fill: false
+            },
+            {
+              label: "AC",
+              data: timelineData.map(d => d.AC),
+              borderColor: "#e74c3c",
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    function downloadExcel() {
+      const wb = XLSX.utils.book_new();
+      const ws_data = [
+        ["Item", "Nilai"],
+        ["BAC", hasilEVM.BAC],
+        ["PV", hasilEVM.PV],
+        ["EV", hasilEVM.EV],
+        ["AC", hasilEVM.AC],
+        ["SPI", hasilEVM.SPI],
+        ["CPI", hasilEVM.CPI],
+        ["VAC", hasilEVM.VAC],
+        ["EAC", hasilEVM.EAC]
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(ws_data);
+      XLSX.utils.book_append_sheet(wb, ws, "EVM");
+      XLSX.writeFile(wb, "evm_result.xlsx");
+    }
+  </script>
+</body>
+</html>
